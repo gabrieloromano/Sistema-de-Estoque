@@ -1,4 +1,6 @@
+import os
 from time import sleep
+import json
 
 def pergunta(mensagem):
     while True:
@@ -17,25 +19,26 @@ class ErroValor(Exception):
         self.mensagem = mensagem
 
 
-class produto:
+class Produto:
     def __init__(self, codigo, nome, valor, categoria, unid_medida, ponto_pedido = 0, saldo=0):
         self.codigo = codigo
         self.nome = nome
         self.valor = float(valor)
-        self.saldo = saldo
         self.categoria = categoria
         self.unid_medida = unid_medida
         self.ponto_pedido = ponto_pedido
+        self.saldo = saldo
 
     def __repr__(self):
         return f"{self.codigo, self.nome, self.valor, self.categoria, self.unid_medida, self.ponto_pedido, self.saldo}"
-
 
     def entrada(self, quantidade):
         self.saldo += quantidade
         print(f"\nFoi dada a entrada de {quantidade}{self.unid_medida} para o item {self.nome}.\nQuantidade em estoque atual: {self.saldo}.")
 
     def saida(self, quantidade):
+        if self.saldo < quantidade:
+            raise ErroValor(f"\nO valor inserido ({quantidade}) é maior que o saldo ({self.saldo}) do item. Insira um valor válido.")
         self.saldo -= quantidade
         if self.saldo < self.ponto_pedido:
             print(f"\nFoi dada a saída de {quantidade}{self.unid_medida} para o item {self.nome}.\nQuantidade em estoque atual: {self.saldo}.\nAlerta! O item {self.nome} entrou em ponto de pedido.")
@@ -54,12 +57,35 @@ class produto:
     def isPontoPed(self):
         return self.saldo <= self.ponto_pedido
 
-class estoque:
+class Estoque:
 
-    def __init__(self):
+    def __init__(self, nome):
+        self.nome = nome
         self.unid_medida = ["MT", "KG", "UN", "CJ"]
         self.categorias = ["VEDACAO", "ELEMENTO DE FIXACAO"]
         self.armazem = []
+        self.armazem_dict = []
+        self.caminho = f"Estoques/{self.nome}.json"
+
+    def fechar(self):
+        self.save_armazem()
+        print("\nFechando o programa.")
+        sleep(1.5)
+
+    def load_armazem(self):
+        if os.path.isfile(self.caminho):
+            arq = open(self.caminho, "r")
+            self.armazem_dict = json.load(arq)
+            for prod in self.armazem_dict:
+                self.armazem.append(Produto(**prod))
+
+    def save_armazem(self):
+        self.armazem_dict = []
+        arq = open(self.caminho, "w")
+        for item in self.armazem:
+            self.armazem_dict.append(item.__dict__)
+        json.dump(self.armazem_dict, arq)
+        arq.close()
 
     def get_item(self, cod):
         for item in self.armazem:
@@ -141,7 +167,7 @@ class estoque:
             else:
                 ponto_ped = 0
 
-            produto_cadastro = produto(codigo, nome, valor, categoria, unid_medida, ponto_ped)
+            produto_cadastro = Produto(codigo, nome, valor, categoria, unid_medida, ponto_ped)
 
             if pergunta("Deseja adicionar saldo ao produto?"):
                 while True:
@@ -160,154 +186,207 @@ class estoque:
             
             print(f"\nProduto cadastrado com sucesso!")
             produto_cadastro.exibir()
-            self.armazem.append(produto_cadastro)
 
-            ###with open("Controle de Estoque/estoque.txt", "a") as f: (ainda não sera utilizado nessa versão)
-                ###f.write(f"{produto_cadastro}")
+            self.armazem.append(produto_cadastro)
 
             if pergunta("Deseja cadastrar um novo produto?"):
                 continue
             else:
                 break
 
-    def alterar_item(self):
+    def delete_item(self):
+        while True:
+
+            print("\n======== DELETAR PRODUTO ========\n")
+
+            if pergunta("Deseja listar os itens em estoque?"):
+                            for item in self.armazem:
+                                print(f"\nCodigo: {item.codigo} | Nome: {item.nome} | Valor: {item.valor} | Saldo: {item.saldo} | Ponto de Pedido: {"Sim" if item.isPontoPed() else "Não"}\n")
+
             while True:
+                try:
+                    cod = input("\nDigite o código a ser alterado: ")
+                    produto_deletado = self.get_item(cod)
+                    break
+                except ErroValor:
+                    print("\nO código digitado é inválido. Tente novamente!")
 
-                print("\n======== ALTERAR PRODUTO ========\n")
-
-                if pergunta("Deseja listar os itens em estoque?"):
-                    for item in self.armazem:
-                        print(f"\nCodigo: {item.codigo} | Nome: {item.nome} | Valor: {item.valor} | Saldo: {item.saldo} | Ponto de Pedido: {"Sim" if item.isPontoPed() else "Não"}\n")
-
-                else:
-                    pass
-
-                while True:
-                    try:
-                        cod = input("\nDigite o código a ser alterado: ")
-                        produto_alterado = self.get_item(cod)
-                        break
-                    except ErroValor:
-                        print("\nO código digitado é inválido. Tente novamente!")
-
-                opcoes = ["[1] Codigo",
-                          "[2] Nome",
-                          "[3] Valor",
-                          "[4] Unidade de Medida",
-                          "[5] Categoria",
-                          "[6] Ponto de Pedido",
-                          "[7] Saldo"]
             
-                for op in opcoes:
-                    print(f"\n{op}")
-    
-                selecao = int(input(f"\nSelecione a opção desejada: "))
+            if pergunta("\nO item será deletado, esta ação não pode ser revertida. Deseja prosseguir?"):
+                if produto_deletado.saldo != 0:
+                    if pergunta(f"\nO item selecionado ainda tem saldo no sistema:{produto_deletado.saldo}. Deseja prosseguir?"):
+                        pass
+                    else:
+                        print("\nCancelando ação e retornando ao menu...\n")
+                        sleep(1.5)
+                        break
+                index_prod = self.armazem.index(produto_deletado)
+                self.armazem.pop(index_prod)
+            else:
+                print("\nCancelando ação e retornando ao menu...\n")
+                sleep(1.5)
+                break
 
-                match selecao:
-                    case 1:
-                        while True:
-                            try:
-                                novo_codigo = input("\nDigite o novo codigo para o produto: ")
-                                if novo_codigo == produto_alterado.codigo:
-                                    print("\nO código inserido já é o atualmente utilizado para este produto! Tente novamente!")
-                                    continue
-                                self.validar_cod(novo_codigo)
-                                produto_alterado.codigo = novo_codigo
-                                break
-                            except ErroValor:
-                                print("\nO código inserido já está em uso. Tente novamente!\n")
-    
-                    case 2:
-                        novo_nome = input("\nDigite o novo nome para o produto: ")
-                        produto_alterado.nome = novo_nome 
+            print("\nProduto deletado com sucesso!")
 
-                    case 3:
-                        while True:
-                            try:
-                                novo_valor = float(input("\nDigite o novo valor para o produto: "))
-                                self.isnegative(novo_valor)
-                                produto_alterado.valor = novo_valor
-                                break
-                            except ValueError:
-                                print("\nDigite um valor valido para o produto: ")
-                            except ErroValor:
-                                print("\nO valor inserido (negativo) não é suportado, insira outro valor!")
-    
-                    case 4:
-                        while True:
-                            try:
-                                nova_unid_medida = input("\nDigite a nova Unidade de Medida para o produto: ").upper()
-                                self.validar_valor(um=nova_unid_medida)
-                                produto_alterado.unid_medida = nova_unid_medida
-                                break
-                            except ErroValor:
-                                print("\nDigite uma Unidade de Medida valida: ")
-    
-                    case 5:
-                        while True:
-                            try:
-                                nova_categoria = input("\nDigite a nova categoria para o produto: ").upper()
-                                self.validar_valor(cat=nova_categoria)
-                                produto_alterado.categoria = nova_categoria
-                                break
-                            except ErroValor:
-                                print("\nDigite uma categoria valida: ")
-    
-                    case 6:
-                        while True:
-                            try:
-                                novo_ponto_pedido = float(input("\nDigite o novo Ponto de Pedido para o produto: "))
-                                self.isnegative(novo_ponto_pedido)
-                                produto_alterado.ponto_pedido = novo_ponto_pedido
-                                break
-                            except ValueError:
-                                print("\nDigite um valor de Ponto de Pedido valido: ")
-                            except ErroValor:
-                                print("\nO valor inserido (negativo) não é suportado, insira outro valor!")
-    
-                    case 7:
-                        while True:
-                            try:
-                                novo_saldo = float(input("\nDigite o novo saldo para o produto: "))
-                                self.isnegative(novo_saldo)
-                                produto_alterado.saldo = novo_saldo
-                                break
-                            except ValueError:
-                                print("\nDigite um valor de saldo valido: ")
-                            except ErroValor:
-                                print("\nO valor inserido (negativo) não é suportado, insira outro valor!")
-    
-                    case _:
-                        print("\nInsira uma opção válida.")
-                        continue
-    
-                produto_alterado.exibir()
-    
-                if pergunta("O produto foi alterado com sucesso! Deseja alterar mais alguma informação?"):
+            if pergunta("Deseja deletar outro produto?"):
+                continue
+            else:
+                break
+
+    def alterar_item(self):
+        while True:
+
+            print("\n======== ALTERAR PRODUTO ========\n")
+
+            if pergunta("Deseja listar os itens em estoque?"):
+                for item in self.armazem:
+                    print(f"\nCodigo: {item.codigo} | Nome: {item.nome} | Valor: {item.valor} | Saldo: {item.saldo} | Ponto de Pedido: {"Sim" if item.isPontoPed() else "Não"}\n")
+
+            else:
+                pass
+
+            while True:
+                try:
+                    cod = input("\nDigite o código a ser alterado: ")
+                    produto_alterado = self.get_item(cod)
+                    break
+                except ErroValor:
+                    print("\nO código digitado é inválido. Tente novamente!")
+
+            opcoes = ["[1] Codigo",
+                        "[2] Nome",
+                        "[3] Valor",
+                        "[4] Unidade de Medida",
+                        "[5] Categoria",
+                        "[6] Ponto de Pedido",
+                        "[7] Saldo"]
+        
+            for op in opcoes:
+                print(f"\n{op}")
+
+            selecao = int(input(f"\nSelecione a opção desejada: "))
+
+            match selecao:
+                case 1:
+                    while True:
+                        try:
+                            novo_codigo = input("\nDigite o novo codigo para o produto: ")
+                            if novo_codigo == produto_alterado.codigo:
+                                print("\nO código inserido já é o atualmente utilizado para este produto! Tente novamente!")
+                                continue
+                            self.validar_cod(novo_codigo)
+                            produto_alterado.codigo = novo_codigo
+                            break
+                        except ErroValor:
+                            print("\nO código inserido já está em uso. Tente novamente!\n")
+
+                case 2:
+                    novo_nome = input("\nDigite o novo nome para o produto: ")
+                    produto_alterado.nome = novo_nome 
+
+                case 3:
+                    while True:
+                        try:
+                            novo_valor = float(input("\nDigite o novo valor para o produto: "))
+                            self.isnegative(novo_valor)
+                            produto_alterado.valor = novo_valor
+                            break
+                        except ValueError:
+                            print("\nDigite um valor valido para o produto: ")
+                        except ErroValor:
+                            print("\nO valor inserido (negativo) não é suportado, insira outro valor!")
+
+                case 4:
+                    while True:
+                        try:
+                            nova_unid_medida = input("\nDigite a nova Unidade de Medida para o produto: ").upper()
+                            self.validar_valor(um=nova_unid_medida)
+                            produto_alterado.unid_medida = nova_unid_medida
+                            break
+                        except ErroValor:
+                            print("\nDigite uma Unidade de Medida valida: ")
+
+                case 5:
+                    while True:
+                        try:
+                            nova_categoria = input("\nDigite a nova categoria para o produto: ").upper()
+                            self.validar_valor(cat=nova_categoria)
+                            produto_alterado.categoria = nova_categoria
+                            break
+                        except ErroValor:
+                            print("\nDigite uma categoria valida: ")
+
+                case 6:
+                    while True:
+                        try:
+                            novo_ponto_pedido = float(input("\nDigite o novo Ponto de Pedido para o produto: "))
+                            self.isnegative(novo_ponto_pedido)
+                            produto_alterado.ponto_pedido = novo_ponto_pedido
+                            break
+                        except ValueError:
+                            print("\nDigite um valor de Ponto de Pedido valido: ")
+                        except ErroValor:
+                            print("\nO valor inserido (negativo) não é suportado, insira outro valor!")
+
+                case 7:
+                    while True:
+                        try:
+                            novo_saldo = float(input("\nDigite o novo saldo para o produto: "))
+                            self.isnegative(novo_saldo)
+                            produto_alterado.saldo = novo_saldo
+                            break
+                        except ValueError:
+                            print("\nDigite um valor de saldo valido: ")
+                        except ErroValor:
+                            print("\nO valor inserido (negativo) não é suportado, insira outro valor!")
+
+                case _:
+                    print("\nInsira uma opção válida.")
                     continue
-                else:
-                    produto_alterado = None
-                    pass
-    
-                return
+
+            produto_alterado.exibir()
+
+            if pergunta("O produto foi alterado com sucesso! Deseja alterar mais alguma informação?"):
+                continue
+            else:
+                produto_alterado = None
+                pass
+
+            return
 
     def menu_estoque(self):
+
+        self.load_armazem()
+        
         opcoes = ["[1] Cadastrar produto",
-                      "[2] Consultar produto",
-                      "[3] Alterar produto",
-                      "[4] Entrada de estoque",
-                      "[5] Saida de estoque",
-                      "[6] Consultar estoque geral",
-                      "[7] Valor de estoque" ,
-                      "[8] Sair"]
+                  "[2] Consultar produto",
+                  "[3] Alterar produto",
+                  "[4] Entrada de estoque",
+                  "[5] Saida de estoque",
+                  "[6] Consultar estoque geral",
+                  "[7] Valor de estoque",
+                  "[8] Deletar produto",
+                  "[9] Sair"]
 
         while True:
+            self.save_armazem()
             print("======== ESTOQUE ========\n")
 
             for op in opcoes:
                 print(f"\n{op}")
 
-            selecao = int(input(f"\nSelecione uma opção: "))
+            while True:
+                try:
+                    selecao = int(input(f"\nSelecione uma opção: "))
+                    self.isnegative(selecao)
+                    break
+                except ValueError:
+                    print("\nInsira uma opção válida.")
+                    continue
+                except ErroValor:
+                    print("\nInsira um número não negativo válido!")
+                    continue
 
             match selecao:
                 case 1:
@@ -331,8 +410,7 @@ class estoque:
                     if pergunta("Deseja retornar ao menu?"):
                         continue
                     else:
-                        print("Fechando o programa.")
-                        sleep(1.5)
+                        self.fechar()
                         break
                             
                 case 3:
@@ -368,7 +446,7 @@ class estoque:
                     if pergunta("Deseja retornar ao menu?"):
                         continue
                     else:
-                        print("Fechando o programa.")
+                        self.fechar()
                         break
 
                 case 5:
@@ -389,13 +467,13 @@ class estoque:
                             break
                         except ValueError:
                             print("\nInsira um valor valido: ")
-                        except ErroValor:
-                            print("\nO valor inserido é inválido (negativo). Insira um valor válido.")
+                        except ErroValor as e:
+                            print(f"{e}")
                         
                     if pergunta("Deseja retornar ao menu?"):
                         continue
                     else:
-                        print("Fechando o programa.")
+                        self.fechar()
                         break
 
                 case 6:
@@ -413,7 +491,7 @@ class estoque:
                     if pergunta("Deseja voltar ao menu?"):
                         continue
                     else:
-                        print("Fechando o programa.")
+                        self.fechar()
                         break
 
                 case 7:
@@ -425,11 +503,18 @@ class estoque:
                     if pergunta("Deseja voltar ao menu?"):
                         continue
                     else:
-                        print("Fechando o programa.")
+                        self.fechar()
                         break
 
                 case 8:
-                    print("Fechando o programa.")
+                    if len(self.armazem) <= 0:
+                        print("\nNão há itens para deletar. Retornando ao menu...")
+                        sleep(3)
+                        continue
+                    self.delete_item()
+
+                case 9:
+                    self.fechar()
                     break
 
                 case _:
@@ -437,6 +522,6 @@ class estoque:
                     continue
 
 
-estoque1 = estoque()
+estoque1 = Estoque("Estoque 2")
 
 estoque1.menu_estoque()
